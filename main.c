@@ -60,7 +60,8 @@ DMA_HandleTypeDef hdma_tim3_ch1_trig;
 
 uint32_t tin_DT_ALT_USB = 0;
 uint8_t USB_Buffer[64];
-
+uint8_t flag1 = 0;
+uint8_t flag2 = 0;
 //uint8_t flag = 0;
 /* USER CODE END PV */
 
@@ -81,17 +82,7 @@ void toggle_blink(){
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-    if(GPIO_Pin == BT_INC)
-    {
-    	HAL_GPIO_WritePin(LED, 1);
-    }
-    if(GPIO_Pin == BT_DEC)
-    {
-    	HAL_GPIO_WritePin(LED, 0);
-    }
-}
+
 /* USER CODE END 0 */
 
 /**
@@ -133,8 +124,8 @@ int main(void)
   HAL_ADC_Start(&hadc1);					//Liga o ADC
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1); //Liga o timer3 canal1
 
-  uint32_t readValue; 						//variavel que recebera o valor do ADC
-  uint32_t readValue_volts;					//variavel que recebera o valor do ADC em volts
+  uint16_t readValue; 						//variavel que recebera o valor do ADC
+  uint16_t readValue_volts;					//variavel que recebera o valor do ADC em volts
 
   /* USER CODE END 2 */
 
@@ -143,7 +134,7 @@ int main(void)
   while (1)
   {
 	  // ###### Lógica do USB ######
-	  if (HAL_GPIO_ReadPin(BT_SEL) == 0){ 								//Verifica se o BT_SEL esta pressionado
+	  if (HAL_GPIO_ReadPin(BT_SEL) == 1){ 								//Verifica se o BT_SEL esta pressionado
 		  if (USB_Buffer[0] != 0){										//Verifica se o USB_Buffer possui algum conteúdo
 			  switch(USB_Buffer[0]){									//Procura alguma opcao do protocolo
 				  case 'L':{											//LIGA LED PELO USB
@@ -189,9 +180,32 @@ int main(void)
 			  toggle_blink();											//Pisca o Led_debug após algum comando por USB
 			  memset(USB_Buffer, 0, 255);								//Limpa o Buffer USB
 		  }
+		  // BOTÃO DE INCREMENTAR BUZZER
+		  if (flag1) {
+			if (readValue >= 4095) { // Verifica se a subtração levará a um valor negativo
+				readValue = 4095; // Define readValue como zero diretamente
+			} else {
+				readValue += 410; // Subtrai 410 normalmente
+			}
+			flag1 = 0; // Desativa a flag da interrupção externa
+			TIM3->CCR1 = 65535 * readValue / 4095; // Passa o valor correto para o timer
+			toggle_blink(); // Espera 1ms
+		}
+          // BOTÃO DE DECREMENTAR BUZZER
+
+          if (flag2) {
+              if (readValue < 410) { // Verifica se a subtração levará a um valor negativo
+                  readValue = 0; // Define readValue como zero diretamente
+              } else {
+                  readValue -= 410; // Subtrai 410 normalmente
+              }
+              flag2 = 0; // Desativa a flag da interrupção externa
+              TIM3->CCR1 = 65535 * readValue / 4095; // Passa o valor correto para o timer
+              toggle_blink(); // Espera 1ms
+          }
 	  }
 	  // ##### Lógica do BUZZER com POTENCIOMETRO #####
-	  if (HAL_GPIO_ReadPin(BT_SEL) == 1){                              //VERIFICA SE BT_SEL não está ACIONADO
+	  if (HAL_GPIO_ReadPin(BT_SEL) == 0){                              //VERIFICA SE BT_SEL não está ACIONADO
 		  HAL_ADC_PollForConversion(&hadc1,1000);
 		  readValue = HAL_ADC_GetValue(&hadc1);
 		  TIM3 -> CCR1 = 65535*readValue/4095;
@@ -435,7 +449,17 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == BT_INC)
+    {
+    	flag1 = 1;
+    }
+    if(GPIO_Pin == BT_DEC)
+    {
+    	flag2 = 1;
+    }
+}
 /* USER CODE END 4 */
 
 /**
